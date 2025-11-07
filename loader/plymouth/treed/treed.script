@@ -1,0 +1,35 @@
+screen_w = Window.GetWidth();
+screen_h = Window.GetHeight();
+
+Theme.SetBackgroundTopColor(0.0, 0.0, 0.0);
+Theme.SetBackgroundBottomColor(0.0, 0.0, 0.0);
+
+img = Image("watermark.png");
+spr = Sprite(img);
+
+base_w = img.GetWidth();
+base_h = img.GetHeight();
+
+target_w = base_w;
+if (base_w > screen_w * 0.8) {
+  target_w = screen_w * 0.8;
+}
+scale0 = target_w / base_w;
+spr.SetScale(scale0, scale0);
+
+base_w = base_w * scale0;
+base_h = base_h * scale0;
+
+x = (screen_w - base_w)/2;
+y = (screen_h - base_h)/2;
+
+spr.SetPosition(x, y);
+
+t = 0.0;
+while (Plymouth.IsRunning()) {
+  scale = 1.0 + 0.05 * Math.Sin(t);
+  spr.SetScale(scale0 * scale, scale0 * scale);
+  spr.SetPosition(x - (base_w*(scale-1))/2, y - (base_h*(scale-1))/2);
+  Plymouth.Sleep(0.03);
+  t = t + 0.15;
+}
