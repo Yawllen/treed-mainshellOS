@@ -25,7 +25,7 @@ dtparam=i2c_arm=on
 dtparam=spi=on
 EOC
 grep -q 'consoleblank=0' /boot/cmdline.txt || sed -i '1 s/$/ consoleblank=0/' /boot/cmdline.txt
-apt-get -y install git unzip dfu-util screen python3-gi python3-gi-cairo libgtk-3-0 xserver-xorg x11-xserver-utils xinit openbox python3-numpy python3-scipy python3-matplotlib i2c-tools python3-venv
+apt-get -y install git unzip dfu-util screen python3-gi python3-gi-cairo libgtk-3-0 xserver-xorg x11-xserver-utils xinit openbox python3-numpy python3-scipy python3-matplotlib i2c-tools python3-venv rsync
 usermod -aG dialout,tty,video,input,render,plugdev,gpio,i2c,spi pi
 cd /home/pi
 [ -d KlipperScreen ] && rm -rf KlipperScreen
@@ -48,5 +48,14 @@ raspi-config nonint do_i2c 0
 raspi-config nonint do_serial 2
 raspi-config nonint do_expand_rootfs
 fi
+REPO_URL="https://github.com/USERNAME/REPO.git"
+BRANCH="main"
+STAGING_DIR="/home/pi/treed/.staging"
+REPO_DIR="$STAGING_DIR/repo"
+mkdir -p "$STAGING_DIR"
+rm -rf "$REPO_DIR"
+git clone --branch "$BRANCH" "$REPO_URL" "$REPO_DIR"
+chmod +x "$REPO_DIR/loader/loader.sh"
+"$REPO_DIR/loader/loader.sh"
 EOF
 sudo reboot
