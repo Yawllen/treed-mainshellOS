@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-# Путь до корня репозитория (там, где лежат loader/, mainsail/ и т.д.)
+# Корень репозитория (там, где лежат loader/, mainsail/ и т.д.)
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# 1. Обновляем пакеты и ставим всё, что нужно для загрузчика и rsync
+# 1. Пакеты для загрузчика и rsync
 sudo apt-get update
 sudo apt-get -y install plymouth plymouth-themes rsync
 
-# 2. Устанавливаем тему загрузчика TreeD для Plymouth
+# 2. Тема загрузчика TreeD для Plymouth
 sudo install -d -m 755 /usr/share/plymouth/themes/treed
 sudo cp -a "$REPO_DIR/loader/plymouth/treed/"* /usr/share/plymouth/themes/treed/
 sudo chown root:root /usr/share/plymouth/themes/treed/*
@@ -25,16 +25,28 @@ if command -v raspi-config >/dev/null 2>&1; then
   sudo raspi-config nonint do_boot_splash 0 || true
 fi
 
-# 5. Добавляем тихий режим ядра и параметры для plymouth в /boot/cmdline.txt
-CMDLINE="/boot/cmdline.txt"
-if [ -f "$CMDLINE" ]; then
-  # Если ещё не добавляли наш маркер (plymouth.ignore-serial-consoles), дописываем параметры
-  if ! grep -q 'plymouth.ignore-serial-consoles' "$CMDLINE"; then
-    sudo sed -i '1 s/$/ quiet splash plymouth.ignore-serial-consoles vt.global_cursor_default=0/' "$CMDLINE"
+# 5. Определяем реальный cmdline.txt (bookworm чаще использует /boot/firmware)
+CMDLINE_FILE=""
+if [ -f /boot/firmware/cmdline.txt ]; then
+  CMDLINE_FILE="/boot/firmware/cmdline.txt"
+elif [ -f /boot/cmdline.txt ]; then
+  CMDLINE_FILE="/boot/cmdline.txt"
+fi
+
+# 6. Добавляем параметры ядра для тихой загрузки и отключения курсора
+if [ -n "$CMDLINE_FILE" ]; then
+  # consoleblank=0 – не гасить экран
+  if ! grep -q 'consoleblank=0' "$CMDLINE_FILE"; then
+    sudo sed -i '1 s/$/ consoleblank=0/' "$CMDLINE_FILE"
+  fi
+
+  # quiet splash + plymouth.ignore-serial-consoles + выключение курсора
+  if ! grep -q 'plymouth.ignore-serial-consoles' "$CMDLINE_FILE"; then
+    sudo sed -i '1 s/$/ quiet splash plymouth.ignore-serial-consoles vt.global_cursor_default=0/' "$CMDLINE_FILE"
   fi
 fi
 
-# 6. (Опционально) override для KlipperScreen, если он есть в репозитории
+# 7. (Опционально) override для KlipperScreen, если он есть в репозитории
 if [ -f "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" ]; then
   sudo install -d -m 755 /etc/systemd/system/KlipperScreen.service.d
   sudo cp -a "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" \
@@ -42,7 +54,7 @@ if [ -f "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" ]; then
   sudo systemctl daemon-reload
 fi
 
-# 7. Тема для Mainsail (.theme)
+# 8. Тема для Mainsail (.theme)
 sudo install -d -m 755 /home/pi/printer_data/config/.theme
 sudo rsync -a --delete "$REPO_DIR/mainsail/.theme/" /home/pi/printer_data/config/.theme/
 sudo chown -R pi:$(id -gn pi) /home/pi/printer_data/config/.theme
