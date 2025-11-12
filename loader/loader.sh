@@ -1,73 +1,71 @@
 #!/bin/bash
-set -e
+# TreeD loader: Plymouth + тихая загрузка + темы Mainsail + автообновление Moonraker
+# Идемпотентный, безопасен к повторному запуску.
+set -euo pipefail
+trap 'echo "[loader] error on line $LINENO"; exit 1' ERR
 
-# Корень репозитория (там, где лежат loader/, mainsail/ и т.д.)
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PI_USER="pi"
+THEME_DIR="/usr/share/plymouth/themes/treed"
+CFG_TXT="/boot/firmware/config.txt"
+CMDLINE_FILE="/boot/firmware/cmdline.txt"
 
-# 1. Пакеты для загрузчика и rsync
 sudo apt-get update
 sudo apt-get -y install plymouth plymouth-themes rsync
 
-# 2. Тема загрузчика TreeD для Plymouth
-sudo install -d -m 755 /usr/share/plymouth/themes/treed
-sudo cp -a "$REPO_DIR/loader/plymouth/treed/"* /usr/share/plymouth/themes/treed/
-sudo chown root:root /usr/share/plymouth/themes/treed/*
-sudo chmod 0644 /usr/share/plymouth/themes/treed/*
+sudo install -d -m 755 "$THEME_DIR"
+sudo cp -a "$REPO_DIR/loader/plymouth/treed/"* "$THEME_DIR"/
+sudo chown root:root "$THEME_DIR"/*
+sudo chmod 0644 "$THEME_DIR"/*
 
-# 3. Делаем тему treed темой по умолчанию (и пересобираем initramfs, если возможно)
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   sudo plymouth-set-default-theme -R treed || sudo plymouth-set-default-theme treed
 fi
 
-# 4. Включаем сплэш через raspi-config (без интерактива), если raspi-config доступен
 if command -v raspi-config >/dev/null 2>&1; then
-  # 0 = enable, 1 = disable
-  sudo raspi-config nonint do_boot_splash 0 || true
+  sudo raspi-config nonint do_boot_splash 0
 fi
 
-# 5. ЖИВОЙ cmdline: /boot/firmware/cmdline.txt
-CMDLINE_FILE="/boot/firmware/cmdline.txt"
-
 if [ -f "$CMDLINE_FILE" ]; then
-  # 5.1. Переносим вывод ядра с tty1 на serial0, чтобы на HDMI не было текстов
   if grep -q 'console=tty1' "$CMDLINE_FILE"; then
     sudo sed -i 's/console=tty1/console=serial0,115200/' "$CMDLINE_FILE"
   fi
-
-  # 5.2. Гарантируем флаги для тихой загрузки и нормального сплэша
-  if ! grep -q 'consoleblank=0' "$CMDLINE_FILE"; then
-    sudo sed -i '1 s/$/ consoleblank=0/' "$CMDLINE_FILE"
-  fi
-
-  if ! grep -q ' quiet' "$CMDLINE_FILE"; then
-    sudo sed -i '1 s/$/ quiet/' "$CMDLINE_FILE"
-  fi
-
-  if ! grep -q ' splash' "$CMDLINE_FILE"; then
-    sudo sed -i '1 s/$/ splash/' "$CMDLINE_FILE"
-  fi
-
-  if ! grep -q 'plymouth.ignore-serial-consoles' "$CMDLINE_FILE"; then
-    sudo sed -i '1 s/$/ plymouth.ignore-serial-consoles/' "$CMDLINE_FILE"
-  fi
-
-  if ! grep -q 'vt.global_cursor_default=0' "$CMDLINE_FILE"; then
-    sudo sed -i '1 s/$/ vt.global_cursor_default=0/' "$CMDLINE_FILE"
-  fi
+  grep -q 'consoleblank=0' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ consoleblank=0/' "$CMDLINE_FILE"
+  grep -q ' quiet' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ quiet/' "$CMDLINE_FILE"
+  grep -q ' splash' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ splash/' "$CMDLINE_FILE"
+  grep -q 'plymouth.ignore-serial-consoles' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ plymouth.ignore-serial-consoles/' "$CMDLINE_FILE"
+  grep -q 'vt.global_cursor_default=0' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ vt.global_cursor_default=0/' "$CMDLINE_FILE"
 fi
 
-# 6. Убираем текстовый логин на tty1 — там будет только Plymouth и потом KS
 sudo systemctl disable --now getty@tty1.service || true
 
-# 7. (Опционально) override для KlipperScreen, если он есть в репозитории
 if [ -f "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" ]; then
   sudo install -d -m 755 /etc/systemd/system/KlipperScreen.service.d
-  sudo cp -a "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" \
-    /etc/systemd/system/KlipperScreen.service.d/override.conf
+  sudo cp -a "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" /etc/systemd/system/KlipperScreen.service.d/override.conf
   sudo systemctl daemon-reload
 fi
 
-# 8. Тема для Mainsail (.theme)
 sudo install -d -m 755 /home/pi/printer_data/config/.theme
-sudo rsync -a --delete "$REPO_DIR/mainsail/.theme/" /home/pi/printer_data/config/.theme/
-sudo chown -R pi:$(id -gn pi) /home/pi/printer_data/config/.theme
+sudo rsync -a --delete "$REPO_DIR/mainsail/.theme/" /home/pi/printer_data/config/.theme/ || true
+sudo chown -R "$PI_USER":"$(id -gn $PI_USER)" /home/pi/printer_data/config/.theme
+
+if ! command -v curl >/dev/null 2>&1; then
+  sudo apt-get -y install curl
+fi
+
+for i in {1..60}; do
+  if curl -fsS http://127.0.0.1:7125/server/info >/dev/null; then
+    break
+  fi
+  sleep 2
+done
+
+curl -sS -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
+     http://127.0.0.1:7125/jsonrpc || true
+
+curl -sS -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
+     http://127.0.0.1:7125/jsonrpc || true
+
+echo "[loader] done"
