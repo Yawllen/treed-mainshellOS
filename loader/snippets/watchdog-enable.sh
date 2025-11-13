@@ -6,3 +6,5 @@ sudo grep -q '^kernel_watchdog_timeout=' "$CFG" || echo 'kernel_watchdog_timeout
 sudo sed -i 's/^#\?watchdog-device.*/watchdog-device = \/dev\/watchdog/' /etc/watchdog.conf || echo 'watchdog-device = /dev/watchdog' | sudo tee -a /etc/watchdog.conf >/dev/null
 sudo systemctl enable watchdog
 sudo systemctl restart watchdog || true
+sudo ln -s /usr/sbin/watchdog /usr/local/bin/watchdog-ctl || true
+echo "[watchdog] Status: $(systemctl status watchdog | grep Active || true)"

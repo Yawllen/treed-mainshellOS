@@ -75,7 +75,6 @@ if [ -d "$REPO_DIR/mainsail/.theme" ]; then
 fi
 sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${THEME_CONFIG_DIR}" || true
 
-
 export REPO_DIR
 export TREED_ROOT="${PI_HOME}/treed"
 sudo mkdir -p "${TREED_ROOT}/state"
@@ -93,6 +92,21 @@ MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
 
 sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
 
+if [ ! -f "${MOONRAKER_CONF_SOURCE}" ]; then
+  echo "[loader] Creating fallback moonraker.conf"
+  cat > "${MOONRAKER_CONF_SOURCE}" <<EOF
+[server]
+host: 0.0.0.0
+port: 7125
+klippy_uds_address: /tmp/klippy_uds
+
+[authorization]
+cors_domains: *.local *.lan
+force_logins: false
+trusted_clients: 192.168.0.0/16
+EOF
+fi
+
 if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
   if [ -f "${MOONRAKER_CONF_TARGET}" ] && [ ! -L "${MOONRAKER_CONF_TARGET}" ]; then
     cp "${MOONRAKER_CONF_TARGET}" "${MOONRAKER_CONF_TARGET}.bak.$(date +%Y%m%d%H%M%S)"
@@ -100,6 +114,8 @@ if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
   cp "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
   chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
 fi
+
+sleep 2  # Delay to ensure config is ready
 
 if command -v systemctl >/dev/null 2>&1; then
   if systemctl list-units --type=service | grep -q moonraker.service; then
