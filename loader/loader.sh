@@ -128,4 +128,7 @@ if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
   "${TREED_KLIPPER_SWITCH}" rn12_hbot_v1 || true
 fi
 
+# Исправленный путь до klipper-config.sh
+"${REPO_DIR}/loader/klipper-config.sh"
+
 echo "[loader] done"
