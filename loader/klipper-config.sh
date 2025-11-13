@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
-PI_USER="${PI_USER:-$(id -un)}"
+PI_USER="${PI_USER:-${SUDO_USER:-pi}}"
 PI_HOME="$(getent passwd "$PI_USER" | cut -d: -f6)"
 PRINTER_DATA_DIR="${PI_HOME}/printer_data"
 KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
@@ -15,7 +14,8 @@ fi
 sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
 
 if [ -f "${TREED_KLIPPER_TARGET}/printer_root.cfg" ]; then
-  printf "[include %s]\n" "${TREED_KLIPPER_TARGET}/printer_root.cfg" | sudo tee "${KLIPPER_CONFIG_DIR}/printer.cfg" >/dev/null
+  printf "[include %s]\n" "${TREED_KLIPPER_TARGET}/printer_root.cfg" \
+  | sudo tee "${KLIPPER_CONFIG_DIR}/printer.cfg" >/dev/null
 fi
 
 if [ -x "${TREED_KLIPPER_TARGET}/switch_profile.sh" ]; then

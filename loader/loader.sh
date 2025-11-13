@@ -3,8 +3,8 @@ set -euo pipefail
 trap 'echo "[loader] error on line $LINENO"; exit 1' ERR
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PI_USER="${PI_USER:-$(id -un)}"
-PI_HOME="$(getent passwd "$PI_USER" | cut -d: -f6 || true)"
+PI_USER="${PI_USER:-${SUDO_USER:-pi}}"
+PI_HOME="$(getent passwd "$PI_USER" | cut -d: -f6)"
 if [ -z "${PI_HOME}" ] || [ ! -d "${PI_HOME}" ]; then
   echo "[loader] ERROR: cannot determine home for user ${PI_USER}"
   exit 1
@@ -23,11 +23,11 @@ THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
 
 export DEBIAN_FRONTEND=noninteractive
 
-# ensure KLIPPER_CONFIG_DIR is a real directory (not a symlink)
 if [ -L "${KLIPPER_CONFIG_DIR}" ]; then
   sudo rm -f "${KLIPPER_CONFIG_DIR}"
 fi
 sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
+
 
 # Fix: If cloned to staging or elsewhere, copy to standard location and re-exec
 if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
@@ -96,7 +96,6 @@ fi
 # Moonraker conf: backup, prefer repo, fallback if none
 MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
 MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
-sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
 
 if [ -f "${MOONRAKER_CONF_TARGET}" ]; then
   cp "${MOONRAKER_CONF_TARGET}" "${MOONRAKER_CONF_TARGET}.bak.$(date +%Y%m%d%H%M%S)" || true
