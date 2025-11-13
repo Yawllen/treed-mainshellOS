@@ -77,10 +77,10 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 TREED_ROOT="/home/pi/treed"
-TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
-TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
+TREED_KLIPPER_SOURCE="${REPO_DIR}/klipper"
 TREED_KLIPPER_TARGET="${TREED_ROOT}/klipper"
+TREED_KLIPPER_SWITCH="${TREED_KLIPPER_TARGET}/switch_profile.sh"
 
 if [ -d "${TREED_KLIPPER_SOURCE}" ]; then
   mkdir -p "${TREED_KLIPPER_TARGET}"
@@ -89,7 +89,7 @@ fi
 
 KLIPPER_CONFIG_DIR="/home/pi/printer_data/config"
 PRINTER_CFG="${KLIPPER_CONFIG_DIR}/printer.cfg"
-TREED_KLIPPER_ENTRY="/home/pi/treed/klipper/printer_root.cfg"
+TREED_KLIPPER_ENTRY="${TREED_KLIPPER_TARGET}/printer_root.cfg"
 
 mkdir -p "${KLIPPER_CONFIG_DIR}"
 
@@ -101,6 +101,10 @@ if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
   cat > "${PRINTER_CFG}" <<EOF
 [include ${TREED_KLIPPER_ENTRY}]
 EOF
+fi
+
+if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
+  "${TREED_KLIPPER_SWITCH}" rn12_hbot_v1 || true
 fi
 
 echo "[loader] done"
