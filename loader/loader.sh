@@ -6,9 +6,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PI_USER="pi"
 THEME_DIR="/usr/share/plymouth/themes/treed"
 CMDLINE_FILE="/boot/firmware/cmdline.txt"
+MOONRAKER_URL="http://127.0.0.1:7125"
+
+export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update
-sudo apt-get -y install plymouth plymouth-themes rsync
+sudo apt-get -y install plymouth plymouth-themes rsync curl
 
 if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
   sudo install -d -m 755 "$THEME_DIR"
@@ -50,23 +53,54 @@ if [ -d "$REPO_DIR/mainsail/.theme" ]; then
 fi
 sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" /home/pi/printer_data/config/.theme || true
 
-if ! command -v curl >/dev/null 2>&1; then
-  sudo apt-get -y install curl
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl list-units --type=service | grep -q moonraker.service; then
+    sudo systemctl restart moonraker.service || true
+  fi
 fi
 
-for i in {1..60}; do
-  if curl -fsS http://127.0.0.1:7125/server/info >/dev/null 2>&1; then
-    break
+if command -v curl >/dev/null 2>&1; then
+  for i in $(seq 1 30); do
+    if curl -fsS "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+
+  curl -sS -H "Content-Type: application/json" \
+       -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
+       "${MOONRAKER_URL}/jsonrpc" || true
+
+  curl -sS -H "Content-Type: application/json" \
+       -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
+       "${MOONRAKER_URL}/jsonrpc" || true
+fi
+
+TREED_ROOT="/home/pi/treed"
+TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
+
+TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
+TREED_KLIPPER_TARGET="${TREED_ROOT}/klipper"
+
+if [ -d "${TREED_KLIPPER_SOURCE}" ]; then
+  mkdir -p "${TREED_KLIPPER_TARGET}"
+  rsync -a "${TREED_KLIPPER_SOURCE}/" "${TREED_KLIPPER_TARGET}/"
+fi
+
+KLIPPER_CONFIG_DIR="/home/pi/printer_data/config"
+PRINTER_CFG="${KLIPPER_CONFIG_DIR}/printer.cfg"
+TREED_KLIPPER_ENTRY="/home/pi/treed/klipper/printer_root.cfg"
+
+mkdir -p "${KLIPPER_CONFIG_DIR}"
+
+if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
+  if [ -f "${PRINTER_CFG}" ] && [ ! -L "${PRINTER_CFG}" ]; then
+    cp "${PRINTER_CFG}" "${PRINTER_CFG}.bak.$(date +%Y%m%d%H%M%S)"
   fi
-  sleep 2
-done
 
-curl -sS -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
-     http://127.0.0.1:7125/jsonrpc || true
-
-curl -sS -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
-     http://127.0.0.1:7125/jsonrpc || true
+  cat > "${PRINTER_CFG}" <<EOF
+[include ${TREED_KLIPPER_ENTRY}]
+EOF
+fi
 
 echo "[loader] done"
