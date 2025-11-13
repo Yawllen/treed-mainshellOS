@@ -104,6 +104,7 @@ TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
 TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
 TREED_KLIPPER_TARGET="${TREED_ROOT}/klipper"
+TREED_KLIPPER_SWITCH="${TREED_KLIPPER_TARGET}/switch_profile.sh"
 
 if [ -d "${TREED_KLIPPER_SOURCE}" ]; then
   mkdir -p "${TREED_KLIPPER_TARGET}"
@@ -111,7 +112,7 @@ if [ -d "${TREED_KLIPPER_SOURCE}" ]; then
 fi
 
 PRINTER_CFG="${KLIPPER_CONFIG_DIR}/printer.cfg"
-TREED_KLIPPER_ENTRY="${TREED_ROOT}/klipper/printer_root.cfg"
+TREED_KLIPPER_ENTRY="${TREED_KLIPPER_TARGET}/printer_root.cfg"
 
 if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
   if [ -f "${PRINTER_CFG}" ] && [ ! -L "${PRINTER_CFG}" ]; then
@@ -121,6 +122,10 @@ if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
   cat > "${PRINTER_CFG}" <<EOF
 [include ${TREED_KLIPPER_ENTRY}]
 EOF
+fi
+
+if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
+  "${TREED_KLIPPER_SWITCH}" rn12_hbot_v1 || true
 fi
 
 echo "[loader] done"
