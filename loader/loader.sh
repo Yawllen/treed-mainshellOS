@@ -21,28 +21,7 @@ PRINTER_DATA_DIR="${PI_HOME}/printer_data"
 KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
 THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
 
-# Fallback moonraker.conf BEFORE repo copy
-MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
-sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
-
-if [ ! -f "${MOONRAKER_CONF_TARGET}" ]; then
-  echo "[loader] Creating fallback moonraker.conf in ${MOONRAKER_CONF_TARGET}"
-  cat > "${MOONRAKER_CONF_TARGET}" <<'EOF'
-[server]
-host: 0.0.0.0
-port: 7125
-klippy_uds_address: /home/pi/printer_data/comms/klippy.sock
-
-[authorization]
-cors_domains: *.local *.lan
-force_logins: false
-trusted_clients: 192.168.0.0/16 10.0.0.0/8 127.0.0.0/8
-
-[update_manager]
-enable_auto_refresh: True
-EOF
-  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}"
-fi
+export DEBIAN_FRONTEND=noninteractive
 
 # Fix: If cloned to staging or elsewhere, copy to standard location and re-exec
 if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
@@ -52,15 +31,6 @@ if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
   cd "${TREED_MAINSHELLOS_DIR}/loader"
   exec ./loader.sh
 fi
-
-# Update moonraker.conf if repo version exists
-MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
-if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
-  cp -f "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
-  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
-fi
-
-export DEBIAN_FRONTEND=noninteractive
 
 sudo apt-get update
 sudo apt-get -y install plymouth plymouth-themes rsync curl
@@ -116,6 +86,38 @@ if [ -d "$REPO_DIR/loader/run.d" ]; then
     bash "$s"
   done
 fi
+
+# Moonraker conf: prefer repo, fallback if none
+MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
+MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
+sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
+
+if [ -f "${MOONRAKER_CONF_TARGET}" ]; then
+  cp "${MOONRAKER_CONF_TARGET}" "${MOONRAKER_CONF_TARGET}.bak.$(date +%Y%m%d%H%M%S)" || true
+fi
+
+if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
+  echo "[loader] Copying moonraker.conf from repo"
+  cp -f "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
+else
+  echo "[loader] Creating fallback moonraker.conf"
+  cat > "${MOONRAKER_CONF_TARGET}" <<'EOF'
+[server]
+host: 0.0.0.0
+port: 7125
+klippy_uds_address: /home/pi/printer_data/comms/klippy.sock
+
+[authorization]
+cors_domains: *.local *.lan
+force_logins: false
+trusted_clients: 192.168.0.0/16 10.0.0.0/8 127.0.0.0/8
+
+[update_manager]
+enable_auto_refresh: True
+EOF
+fi
+
+chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
 
 if command -v curl >/dev/null 2>&1; then
   for i in $(seq 1 30); do
