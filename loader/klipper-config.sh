@@ -15,12 +15,12 @@ mkdir -p "${PROFILE_DIR}"
 SERIAL_PATH="$(ls /dev/serial/by-id/* 2>/dev/null | head -n 1 || true)"
 
 mkdir -p "${BASE_DIR}"
-
-cat > "${BASE_DIR}/printer_root.cfg" <<EOF_ROOT
+cat > "${BASE_DIR}/printer_root.cfg" <<'EOF_ROOT'
 [include profiles/current/root.cfg]
 EOF_ROOT
 
-cat > "${PROFILE_DIR}/root.cfg" <<EOF_PROFILE
+if [ ! -f "${PROFILE_DIR}/root.cfg" ]; then
+  cat > "${PROFILE_DIR}/root.cfg" <<EOF_PROFILE
 [mcu]
 serial: ${SERIAL_PATH}
 restart_method: command
@@ -31,6 +31,7 @@ max_velocity: 200
 max_accel: 2000
 square_corner_velocity: 5.0
 EOF_PROFILE
+fi
 
 ln -sfn "${PROFILE_NAME}" "${CURRENT_LINK}"
 
@@ -44,4 +45,4 @@ cat > "${PRINTER_CFG}" <<EOF_PRC
 [include ${BASE_DIR}/printer_root.cfg]
 EOF_PRC
 
-sudo systemctl restart klipper
+sudo systemctl restart klipper || true
