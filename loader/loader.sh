@@ -4,9 +4,19 @@ trap 'echo "[loader] error on line $LINENO"; exit 1' ERR
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PI_USER="${PI_USER:-$(id -un)}"
+PI_HOME="$(getent passwd "$PI_USER" | cut -d: -f6 || true)"
+if [ -z "${PI_HOME}" ] || [ ! -d "${PI_HOME}" ]; then
+  echo "[loader] ERROR: cannot determine home for user ${PI_USER}"
+  exit 1
+fi
+
 THEME_DIR="/usr/share/plymouth/themes/treed"
 CMDLINE_FILE="/boot/firmware/cmdline.txt"
 MOONRAKER_URL="http://127.0.0.1:7125"
+
+PRINTER_DATA_DIR="${PI_HOME}/printer_data"
+KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
+THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -47,11 +57,24 @@ if [ -f "$REPO_DIR/loader/systemd/KlipperScreen.service.d/override.conf" ]; then
   sudo systemctl daemon-reload
 fi
 
-sudo install -d -m 755 /home/pi/printer_data/config/.theme
+sudo install -d -m 755 "${THEME_CONFIG_DIR}"
 if [ -d "$REPO_DIR/mainsail/.theme" ]; then
-  sudo rsync -a --delete "$REPO_DIR/mainsail/.theme/" /home/pi/printer_data/config/.theme/ || true
+  sudo rsync -a --delete "$REPO_DIR/mainsail/.theme/" "${THEME_CONFIG_DIR}/" || true
 fi
-sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" /home/pi/printer_data/config/.theme || true
+sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${THEME_CONFIG_DIR}" || true
+
+MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
+MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
+
+sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
+
+if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
+  if [ -f "${MOONRAKER_CONF_TARGET}" ] && [ ! -L "${MOONRAKER_CONF_TARGET}" ]; then
+    cp "${MOONRAKER_CONF_TARGET}" "${MOONRAKER_CONF_TARGET}.bak.$(date +%Y%m%d%H%M%S)"
+  fi
+  cp "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
+  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   if systemctl list-units --type=service | grep -q moonraker.service; then
@@ -61,37 +84,34 @@ fi
 
 if command -v curl >/dev/null 2>&1; then
   for i in $(seq 1 30); do
-    if curl -fsS "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout 5 --max-time 10 "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
       break
     fi
     sleep 2
   done
 
-  curl -sS -H "Content-Type: application/json" \
+  curl -sS --connect-timeout 5 --max-time 10 -H "Content-Type: application/json" \
        -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
        "${MOONRAKER_URL}/jsonrpc" || true
 
-  curl -sS -H "Content-Type: application/json" \
+  curl -sS --connect-timeout 5 --max-time 10 -H "Content-Type: application/json" \
        -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
        "${MOONRAKER_URL}/jsonrpc" || true
 fi
 
-TREED_ROOT="/home/pi/treed"
+TREED_ROOT="${PI_HOME}/treed"
+TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
-TREED_KLIPPER_SOURCE="${REPO_DIR}/klipper"
+TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
 TREED_KLIPPER_TARGET="${TREED_ROOT}/klipper"
-TREED_KLIPPER_SWITCH="${TREED_KLIPPER_TARGET}/switch_profile.sh"
 
 if [ -d "${TREED_KLIPPER_SOURCE}" ]; then
   mkdir -p "${TREED_KLIPPER_TARGET}"
   rsync -a "${TREED_KLIPPER_SOURCE}/" "${TREED_KLIPPER_TARGET}/"
 fi
 
-KLIPPER_CONFIG_DIR="/home/pi/printer_data/config"
 PRINTER_CFG="${KLIPPER_CONFIG_DIR}/printer.cfg"
-TREED_KLIPPER_ENTRY="${TREED_KLIPPER_TARGET}/printer_root.cfg"
-
-mkdir -p "${KLIPPER_CONFIG_DIR}"
+TREED_KLIPPER_ENTRY="${TREED_ROOT}/klipper/printer_root.cfg"
 
 if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
   if [ -f "${PRINTER_CFG}" ] && [ ! -L "${PRINTER_CFG}" ]; then
@@ -101,10 +121,6 @@ if [ -f "${TREED_KLIPPER_ENTRY}" ]; then
   cat > "${PRINTER_CFG}" <<EOF
 [include ${TREED_KLIPPER_ENTRY}]
 EOF
-fi
-
-if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
-  "${TREED_KLIPPER_SWITCH}" rn12_hbot_v1 || true
 fi
 
 echo "[loader] done"
