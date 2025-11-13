@@ -13,6 +13,37 @@ fi
 TREED_ROOT="${PI_HOME}/treed"
 TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
+THEME_DIR="/usr/share/plymouth/themes/treed"
+CMDLINE_FILE="/boot/firmware/cmdline.txt"
+MOONRAKER_URL="http://127.0.0.1:7125"
+
+PRINTER_DATA_DIR="${PI_HOME}/printer_data"
+KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
+THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
+
+# Fallback moonraker.conf BEFORE repo copy
+MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
+sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
+
+if [ ! -f "${MOONRAKER_CONF_TARGET}" ]; then
+  echo "[loader] Creating fallback moonraker.conf in ${MOONRAKER_CONF_TARGET}"
+  cat > "${MOONRAKER_CONF_TARGET}" <<'EOF'
+[server]
+host: 0.0.0.0
+port: 7125
+klippy_uds_address: /home/pi/printer_data/comms/klippy.sock
+
+[authorization]
+cors_domains: *.local *.lan
+force_logins: false
+trusted_clients: 192.168.0.0/16 10.0.0.0/8 127.0.0.0/8
+
+[update_manager]
+enable_auto_refresh: True
+EOF
+  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}"
+fi
+
 # Fix: If cloned to staging or elsewhere, copy to standard location and re-exec
 if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
   sudo mkdir -p "${TREED_MAINSHELLOS_DIR}"
@@ -22,13 +53,12 @@ if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
   exec ./loader.sh
 fi
 
-THEME_DIR="/usr/share/plymouth/themes/treed"
-CMDLINE_FILE="/boot/firmware/cmdline.txt"
-MOONRAKER_URL="http://127.0.0.1:7125"
-
-PRINTER_DATA_DIR="${PI_HOME}/printer_data"
-KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
-THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
+# Update moonraker.conf if repo version exists
+MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
+if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
+  cp -f "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
+  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -39,7 +69,7 @@ if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
   sudo install -d -m 755 "$THEME_DIR"
   sudo cp -a "$REPO_DIR/loader/plymouth/treed/"* "$THEME_DIR"/
   sudo chown root:root "$THEME_DIR"/* || true
-  sudo chmod 0644 "$THEME_DIR"/* || true
+  sudo chmod 644 "$THEME_DIR"/* || true
 fi
 
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
@@ -87,42 +117,6 @@ if [ -d "$REPO_DIR/loader/run.d" ]; then
   done
 fi
 
-MOONRAKER_CONF_SOURCE="${REPO_DIR}/moonraker/moonraker.conf"
-MOONRAKER_CONF_TARGET="${KLIPPER_CONFIG_DIR}/moonraker.conf"
-
-sudo install -d -m 755 "${KLIPPER_CONFIG_DIR}"
-
-if [ ! -f "${MOONRAKER_CONF_SOURCE}" ]; then
-  echo "[loader] Creating fallback moonraker.conf"
-  cat > "${MOONRAKER_CONF_SOURCE}" <<EOF
-[server]
-host: 0.0.0.0
-port: 7125
-klippy_uds_address: /tmp/klippy_uds
-
-[authorization]
-cors_domains: *.local *.lan
-force_logins: false
-trusted_clients: 192.168.0.0/16
-EOF
-fi
-
-if [ -f "${MOONRAKER_CONF_SOURCE}" ]; then
-  if [ -f "${MOONRAKER_CONF_TARGET}" ] && [ ! -L "${MOONRAKER_CONF_TARGET}" ]; then
-    cp "${MOONRAKER_CONF_TARGET}" "${MOONRAKER_CONF_TARGET}.bak.$(date +%Y%m%d%H%M%S)"
-  fi
-  cp "${MOONRAKER_CONF_SOURCE}" "${MOONRAKER_CONF_TARGET}"
-  chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
-fi
-
-sleep 2  # Delay to ensure config is ready
-
-if command -v systemctl >/dev/null 2>&1; then
-  if systemctl list-units --type=service | grep -q moonraker.service; then
-    sudo systemctl restart moonraker.service || true
-  fi
-fi
-
 if command -v curl >/dev/null 2>&1; then
   for i in $(seq 1 30); do
     if curl -fsS --connect-timeout 5 --max-time 10 "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
@@ -167,6 +161,10 @@ if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
 fi
 
 "${REPO_DIR}/loader/klipper-config.sh" || true
+
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl restart moonraker.service klipper.service || true
+fi
 
 echo "[loader] Installation complete. Rebooting in 5 seconds..."
 sleep 5
