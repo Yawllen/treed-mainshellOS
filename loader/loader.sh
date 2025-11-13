@@ -131,4 +131,6 @@ fi
 # Исправленный путь до klipper-config.sh
 "${REPO_DIR}/loader/klipper-config.sh"
 
-echo "[loader] done"
+echo "[loader] Installation complete. Rebooting in 5 seconds..."
+sleep 5
+sudo reboot
