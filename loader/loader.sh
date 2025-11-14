@@ -175,8 +175,20 @@ if [ -x "${TREED_KLIPPER_SWITCH}" ]; then
 fi
 
 "${REPO_DIR}/loader/klipper-config.sh" || true
-
 sudo systemctl restart klipper.service || true
+
+CMDLINE_FILE="/boot/firmware/cmdline.txt"
+[ -f "$CMDLINE_FILE" ] || CMDLINE_FILE="/boot/cmdline.txt"
+if [ -f "$CMDLINE_FILE" ]; then
+  if ! grep -q 'splash' "$CMDLINE_FILE"; then
+    sudo sed -i '1s/$/ quiet splash plymouth.ignore-serial-consoles/' "$CMDLINE_FILE"
+  fi
+fi
+
+sudo systemctl daemon-reload
+sudo plymouth-set-default-theme -R treed || true
+sudo update-initramfs -u || true
+sync
 
 echo "[loader] Installation complete. Rebooting in 5 seconds..."
 sleep 5
