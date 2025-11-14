@@ -1,3 +1,4 @@
+```bash
 cd /home/pi
 sudo systemctl stop KlipperScreen
 sudo rm -rf treed
@@ -9,3 +10,4 @@ find loader/run.d loader/snippets -type f -name '*.sh' -exec chmod +x {} \;
 [ -d scripts ] && chmod +x scripts/*.sh || true
 sudo ./loader/loader.sh
 sudo loader/klipper-config.sh
+```
