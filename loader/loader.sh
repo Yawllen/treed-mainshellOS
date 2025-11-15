@@ -25,16 +25,12 @@ THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Fast mode support and helper functions for package installation and theme hashing.
-# Set TREED_FAST=1 in the environment to enable a faster run (skip upgrade and shorten waits).
 FAST="${TREED_FAST:-0}"
-
-# State directory (already created further down) and cache for Plymouth theme hash.
 STATE_DIR="${TREED_ROOT}/state"
 THEME_HASH_FILE="${STATE_DIR}/plymouth_theme.sha"
+
 sudo install -d -m 755 "${STATE_DIR}"
 sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${STATE_DIR}" || true
-
 
 # Install only missing packages. Uses --no-install-recommends for speed.
 ensure_packages() {
@@ -73,32 +69,32 @@ ensure_packages plymouth plymouth-themes rsync curl
 
 if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
   sudo install -d -m 755 "$THEME_DIR"
-  # Determine if the plymouth theme needs to be (re)deployed and initramfs rebuilt.
+
   CUR_HASH="$(theme_hash_repo)"
   PREV_HASH="$(cat "$THEME_HASH_FILE" 2>/dev/null || true)"
   NEED_PLY=0
+
   [ "$CUR_HASH" != "$PREV_HASH" ] && NEED_PLY=1
-  # If the plymouth-set-default-theme command is missing, or the default.plymouth symlink is absent, we also need to redeploy.
-  if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then NEED_PLY=1; fi
-  if [ ! -e /usr/share/plymouth/themes/default.plymouth ]; then NEED_PLY=1; fi
-  if [ "$(plymouth-set-default-theme 2>/dev/null || true)" != "treed" ]; then NEED_PLY=1; fi
+  command -v plymouth-set-default-theme >/dev/null 2>&1 || NEED_PLY=1
+  [ -e /usr/share/plymouth/themes/default.plymouth ] || NEED_PLY=1
+  [ "$(plymouth-set-default-theme 2>/dev/null || true)" = "treed" ] || NEED_PLY=1
 
   if [ "$NEED_PLY" -eq 1 ]; then
-    # Sync the theme files only when needed.
     sudo rsync -a --delete "$REPO_DIR/loader/plymouth/treed/" "$THEME_DIR/"
     sudo chown root:root "$THEME_DIR"/* || true
     sudo chmod 644 "$THEME_DIR"/* || true
-    # Set the theme as default and ensure default.plymouth points to it.
-    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-      sudo plymouth-set-default-theme treed || true
-    fi
+
+    sudo plymouth-set-default-theme treed || true
     [ -e /usr/share/plymouth/themes/default.plymouth ] || sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
-    # Rebuild initramfs with the new theme.
     sudo plymouth-set-default-theme -R treed || true
-    # Record the current theme hash to skip future work.
+
     echo "$CUR_HASH" | sudo tee "$THEME_HASH_FILE" >/dev/null
   fi
 fi
+
+# Доп. гарантия: даже если NEED_PLY=0, но вдруг ссылка исчезла — создадим.
+[ -e /usr/share/plymouth/themes/default.plymouth ] || sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
+
 
 if command -v raspi-config >/dev/null 2>&1; then
   sudo raspi-config nonint do_boot_splash 0 || true
