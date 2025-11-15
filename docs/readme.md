@@ -11,7 +11,6 @@ chmod +x loader/loader.sh loader/klipper-config.sh
 find loader/run.d loader/snippets -type f -name '*.sh' -exec chmod +x {} \;
 [ -d scripts ] && chmod +x scripts/*.sh || true
 sudo TREED_FAST=1 ./loader/loader.sh
-
 ```
 
 ```bash
