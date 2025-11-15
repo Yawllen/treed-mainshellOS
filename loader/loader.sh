@@ -14,7 +14,7 @@ TREED_ROOT="${PI_HOME}/treed"
 TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
 THEME_DIR="/usr/share/plymouth/themes/treed"
-# Determine the location of the kernel command-line file once, supporting both /boot/firmware and /boot.
+# Determine the path to cmdline.txt once. Use /boot/firmware on newer Pis or fallback to /boot.
 CMDLINE_FILE="/boot/firmware/cmdline.txt"
 [ -f "$CMDLINE_FILE" ] || CMDLINE_FILE="/boot/cmdline.txt"
 MOONRAKER_URL="http://127.0.0.1:7125"
@@ -24,6 +24,32 @@ KLIPPER_CONFIG_DIR="${PRINTER_DATA_DIR}/config"
 THEME_CONFIG_DIR="${KLIPPER_CONFIG_DIR}/.theme"
 
 export DEBIAN_FRONTEND=noninteractive
+
+# Fast mode support and helper functions for package installation and theme hashing.
+# Set TREED_FAST=1 in the environment to enable a faster run (skip upgrade and shorten waits).
+FAST="${TREED_FAST:-0}"
+
+# State directory (already created further down) and cache for Plymouth theme hash.
+STATE_DIR="${TREED_ROOT}/state"
+THEME_HASH_FILE="${STATE_DIR}/plymouth_theme.sha"
+
+# Install only missing packages. Uses --no-install-recommends for speed.
+ensure_packages() {
+  local missing=()
+  for p in "$@"; do
+    dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p")
+  done
+  if [ ${#missing[@]} -gt 0 ]; then
+    sudo apt-get update
+    sudo apt-get -y install --no-install-recommends "${missing[@]}"
+  fi
+}
+
+# Compute a hash of the plymouth theme files in the repository.
+theme_hash_repo() {
+  find "$REPO_DIR/loader/plymouth/treed" -type f -print0 2>/dev/null \
+    | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'
+}
 
 if [ -L "${KLIPPER_CONFIG_DIR}" ]; then
   sudo rm -f "${KLIPPER_CONFIG_DIR}"
@@ -40,26 +66,35 @@ if [ "$REPO_DIR" != "${TREED_MAINSHELLOS_DIR}" ]; then
   exec ./loader.sh
 fi
 
-sudo apt-get update
-sudo apt-get -y install plymouth plymouth-themes rsync curl
+ensure_packages plymouth plymouth-themes rsync curl
 
 if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
   sudo install -d -m 755 "$THEME_DIR"
-  sudo cp -a "$REPO_DIR/loader/plymouth/treed/"* "$THEME_DIR"/
-  sudo chown root:root "$THEME_DIR"/* || true
-  sudo chmod 644 "$THEME_DIR"/* || true
-fi
+  # Determine if the plymouth theme needs to be (re)deployed and initramfs rebuilt.
+  CUR_HASH="$(theme_hash_repo)"
+  PREV_HASH="$(cat "$THEME_HASH_FILE" 2>/dev/null || true)"
+  NEED_PLY=0
+  [ "$CUR_HASH" != "$PREV_HASH" ] && NEED_PLY=1
+  # If the plymouth-set-default-theme command is missing, or the default.plymouth symlink is absent, we also need to redeploy.
+  if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then NEED_PLY=1; fi
+  if [ ! -e /usr/share/plymouth/themes/default.plymouth ]; then NEED_PLY=1; fi
+  if [ "$(plymouth-set-default-theme 2>/dev/null || true)" != "treed" ]; then NEED_PLY=1; fi
 
-if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-  # Set the default theme first to ensure /usr/share/plymouth/themes/default.plymouth is created.
-  # If default.plymouth still does not exist, forcefully link it to our treed theme.
-  sudo plymouth-set-default-theme treed || true
-  if [ ! -e /usr/share/plymouth/themes/default.plymouth ]; then
-    sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
+  if [ "$NEED_PLY" -eq 1 ]; then
+    # Sync the theme files only when needed.
+    sudo rsync -a --delete "$REPO_DIR/loader/plymouth/treed/" "$THEME_DIR/"
+    sudo chown root:root "$THEME_DIR"/* || true
+    sudo chmod 644 "$THEME_DIR"/* || true
+    # Set the theme as default and ensure default.plymouth points to it.
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+      sudo plymouth-set-default-theme treed || true
+    fi
+    [ -e /usr/share/plymouth/themes/default.plymouth ] || sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
+    # Rebuild initramfs with the new theme.
+    sudo plymouth-set-default-theme -R treed || true
+    # Record the current theme hash to skip future work.
+    echo "$CUR_HASH" | sudo tee "$THEME_HASH_FILE" >/dev/null
   fi
-  # Rebuild the initramfs to embed our treed theme.
-  sudo plymouth-set-default-theme -R treed || true
-  sudo update-initramfs -u || true
 fi
 
 if command -v raspi-config >/dev/null 2>&1; then
@@ -67,7 +102,7 @@ if command -v raspi-config >/dev/null 2>&1; then
 fi
 
 if [ -f "$CMDLINE_FILE" ]; then
-  # Ensure both serial and tty1 consoles are present. Do not remove console=tty1.
+  # Ensure both serial and tty1 consoles are present and do not remove tty1. If absent, append them.
   grep -q 'console=serial0,115200' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ console=serial0,115200/' "$CMDLINE_FILE"
   grep -q 'console=tty1' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ console=tty1/' "$CMDLINE_FILE"
   # Append other boot parameters if missing: disable screen blanking, enable quiet splash, ignore serial consoles for Plymouth, and hide the blinking cursor.
@@ -143,20 +178,27 @@ chown "${PI_USER}":"$(id -gn "${PI_USER}")" "${MOONRAKER_CONF_TARGET}" || true
 sudo systemctl restart moonraker.service || true
 
 if command -v curl >/dev/null 2>&1; then
-  for i in $(seq 1 30); do
-    if curl -fsS --connect-timeout 5 --max-time 10 "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
+  # Wait for Moonraker to come up. Use fewer attempts in fast mode.
+  tries=30
+  [ "$FAST" = "1" ] && tries=10
+  for i in $(seq 1 $tries); do
+    if curl -fsS --connect-timeout 3 --max-time 5 "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
       break
     fi
-    sleep 2
+    sleep 1
   done
 
-  curl -sS --connect-timeout 5 --max-time 10 -H "Content-Type: application/json" \
+  # Always refresh update information.
+  curl -sS --connect-timeout 3 --max-time 5 -H "Content-Type: application/json" \
        -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
        "${MOONRAKER_URL}/jsonrpc" || true
 
-  curl -sS --connect-timeout 5 --max-time 10 -H "Content-Type: application/json" \
-       -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
-       "${MOONRAKER_URL}/jsonrpc" || true
+  # Perform upgrade only in non-fast mode.
+  if [ "$FAST" != "1" ]; then
+    curl -sS --connect-timeout 5 --max-time 15 -H "Content-Type: application/json" \
+         -d '{"jsonrpc":"2.0","method":"machine.update.upgrade","params":{},"id":2}' \
+         "${MOONRAKER_URL}/jsonrpc" || true
+  fi
 fi
 
 TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
@@ -188,15 +230,10 @@ fi
 "${REPO_DIR}/loader/klipper-config.sh" || true
 sudo systemctl restart klipper.service || true
 
-if [ -f "$CMDLINE_FILE" ]; then
-  if ! grep -q 'splash' "$CMDLINE_FILE"; then
-    sudo sed -i '1s/$/ quiet splash plymouth.ignore-serial-consoles/' "$CMDLINE_FILE"
-  fi
-fi
-
+# Reload systemd to pick up any new or changed service units.
 sudo systemctl daemon-reload
-sudo plymouth-set-default-theme -R treed || true
-sudo update-initramfs -u || true
+
+# Flush filesystem buffers to disk once. Multiple syncs are redundant.
 sync
 
 echo "[loader] Installation complete. Rebooting in 5 seconds..."
