@@ -6,6 +6,9 @@ set -euo pipefail
 
 log_info "Step plymouth-cmdline: updating kernel cmdline for plymouth"
 
+BOOT_DIR="$(detect_boot_dir)"
+CMDLINE_FILE="$(detect_cmdline_file "${BOOT_DIR}")"
+
 if [ ! -f "${CMDLINE_FILE}" ]; then
   log_error "cmdline file not found: ${CMDLINE_FILE}"
   exit 1
@@ -16,8 +19,11 @@ backup_file_once "${CMDLINE_FILE}"
 line="$(tr -d '\n' < "${CMDLINE_FILE}" || true)"
 
 if [ -z "${line}" ]; then
-  log_error "cmdline file ${CMDLINE_FILE} is empty; aborting to avoid breaking boot"
-  exit 1
+  line="$(cat /proc/cmdline || echo "")"
+  if [ -z "${line}" ]; then
+    log_error "cannot determine base cmdline from /proc/cmdline"
+    exit 1
+  fi
 fi
 
 line="$(printf '%s\n' "${line}" | sed -E 's/(^| )plymouth\.enable=0( |$)/ /g' | tr -s ' ')"
