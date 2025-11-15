@@ -131,8 +131,6 @@ fi
 sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${THEME_CONFIG_DIR}" || true
 
 export REPO_DIR TREED_ROOT PI_USER PI_HOME PRINTER_DATA_DIR KLIPPER_CONFIG_DIR
-sudo install -d -m 755 "${TREED_ROOT}/state"
-sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${TREED_ROOT}/state" || true
 
 if [ -d "$REPO_DIR/loader/run.d" ]; then
   find "$REPO_DIR/loader/run.d" -type f -name '*.sh' -exec chmod +x {} +
