@@ -14,7 +14,9 @@ TREED_ROOT="${PI_HOME}/treed"
 TREED_MAINSHELLOS_DIR="${TREED_ROOT}/treed-mainshellOS"
 
 THEME_DIR="/usr/share/plymouth/themes/treed"
+# Determine the location of the kernel command-line file once, supporting both /boot/firmware and /boot.
 CMDLINE_FILE="/boot/firmware/cmdline.txt"
+[ -f "$CMDLINE_FILE" ] || CMDLINE_FILE="/boot/cmdline.txt"
 MOONRAKER_URL="http://127.0.0.1:7125"
 
 PRINTER_DATA_DIR="${PI_HOME}/printer_data"
@@ -49,7 +51,15 @@ if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
 fi
 
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-  sudo plymouth-set-default-theme -R treed || sudo plymouth-set-default-theme treed || true
+  # Set the default theme first to ensure /usr/share/plymouth/themes/default.plymouth is created.
+  # If default.plymouth still does not exist, forcefully link it to our treed theme.
+  sudo plymouth-set-default-theme treed || true
+  if [ ! -e /usr/share/plymouth/themes/default.plymouth ]; then
+    sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
+  fi
+  # Rebuild the initramfs to embed our treed theme.
+  sudo plymouth-set-default-theme -R treed || true
+  sudo update-initramfs -u || true
 fi
 
 if command -v raspi-config >/dev/null 2>&1; then
@@ -57,9 +67,10 @@ if command -v raspi-config >/dev/null 2>&1; then
 fi
 
 if [ -f "$CMDLINE_FILE" ]; then
-  if grep -q 'console=tty1' "$CMDLINE_FILE"; then
-    sudo sed -i 's/console=tty1/console=serial0,115200/' "$CMDLINE_FILE"
-  fi
+  # Ensure both serial and tty1 consoles are present. Do not remove console=tty1.
+  grep -q 'console=serial0,115200' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ console=serial0,115200/' "$CMDLINE_FILE"
+  grep -q 'console=tty1' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ console=tty1/' "$CMDLINE_FILE"
+  # Append other boot parameters if missing: disable screen blanking, enable quiet splash, ignore serial consoles for Plymouth, and hide the blinking cursor.
   grep -q 'consoleblank=0' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ consoleblank=0/' "$CMDLINE_FILE"
   grep -q ' quiet' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ quiet/' "$CMDLINE_FILE"
   grep -q ' splash' "$CMDLINE_FILE" || sudo sed -i '1 s/$/ splash/' "$CMDLINE_FILE"
@@ -177,8 +188,6 @@ fi
 "${REPO_DIR}/loader/klipper-config.sh" || true
 sudo systemctl restart klipper.service || true
 
-CMDLINE_FILE="/boot/firmware/cmdline.txt"
-[ -f "$CMDLINE_FILE" ] || CMDLINE_FILE="/boot/cmdline.txt"
 if [ -f "$CMDLINE_FILE" ]; then
   if ! grep -q 'splash' "$CMDLINE_FILE"; then
     sudo sed -i '1s/$/ quiet splash plymouth.ignore-serial-consoles/' "$CMDLINE_FILE"
