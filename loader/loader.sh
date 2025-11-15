@@ -87,6 +87,9 @@ if [ -d "$REPO_DIR/loader/plymouth/treed" ]; then
     sudo plymouth-set-default-theme treed || true
     [ -e /usr/share/plymouth/themes/default.plymouth ] || sudo ln -sf "${THEME_DIR}/treed.plymouth" /usr/share/plymouth/themes/default.plymouth
     sudo plymouth-set-default-theme -R treed || true
+    sudo update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth "${THEME_DIR}/treed.plymouth" 100 || true
+    sudo update-alternatives --set default.plymouth "${THEME_DIR}/treed.plymouth" || true
+
 
     echo "$CUR_HASH" | sudo tee "$THEME_HASH_FILE" >/dev/null
   fi
@@ -178,17 +181,18 @@ if command -v curl >/dev/null 2>&1; then
   # Wait for Moonraker to come up. Use fewer attempts in fast mode.
   tries=30
   [ "$FAST" = "1" ] && tries=10
+
   for i in $(seq 1 $tries); do
-    if curl -fsS --connect-timeout 3 --max-time 5 "${MOONRAKER_URL}/server/info" >/dev/null 2>&1; then
-      break
-    fi
+    code="$(curl -s -o /dev/null -w "%{http_code}" \
+      --connect-timeout 3 --max-time 5 \
+      "${MOONRAKER_URL}/server/info" || true)"
+    [ "$code" = "200" ] && break
     sleep 1
   done
 
-  # Always refresh update information.
-  curl -sS --connect-timeout 3 --max-time 5 -H "Content-Type: application/json" \
+  curl -sS --fail --connect-timeout 3 --max-time 5 -H "Content-Type: application/json" \
        -d '{"jsonrpc":"2.0","method":"machine.update.refresh","params":{},"id":1}' \
-       "${MOONRAKER_URL}/jsonrpc" || true
+       "${MOONRAKER_URL}/jsonrpc" >/dev/null 2>&1 || true
 
   # Perform upgrade only in non-fast mode.
   if [ "$FAST" != "1" ]; then
@@ -197,6 +201,7 @@ if command -v curl >/dev/null 2>&1; then
          "${MOONRAKER_URL}/jsonrpc" || true
   fi
 fi
+
 
 TREED_KLIPPER_SOURCE="${TREED_MAINSHELLOS_DIR}/klipper"
 TREED_KLIPPER_TARGET="${TREED_ROOT}/klipper"
