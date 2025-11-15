@@ -8,8 +8,18 @@ BOOT_DIR="/boot/firmware"
 [ -d "$BOOT_DIR" ] || BOOT_DIR="/boot"
 CMDLINE_FILE="${BOOT_DIR}/cmdline.txt"
 CONFIG_TXT="${BOOT_DIR}/config.txt"
-THEME_SRC="${REPO_DIR}/theme/treed"
 THEME_DST="/usr/share/plymouth/themes/treed"
+if [ -d "${REPO_DIR}/plymouth/treed" ]; then
+  THEME_SRC="${REPO_DIR}/plymouth/treed"
+elif [ -d "${REPO_DIR}/plymouth/themes/treed" ]; then
+  THEME_SRC="${REPO_DIR}/plymouth/themes/treed"
+elif [ -d "${REPO_DIR}/plymouth/theme/treed" ]; then
+  THEME_SRC="${REPO_DIR}/plymouth/theme/treed"
+elif [ -d "${REPO_DIR}/theme/treed" ]; then
+  THEME_SRC="${REPO_DIR}/theme/treed"
+else
+  THEME_SRC=""
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
