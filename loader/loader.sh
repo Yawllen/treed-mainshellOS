@@ -32,6 +32,9 @@ FAST="${TREED_FAST:-0}"
 # State directory (already created further down) and cache for Plymouth theme hash.
 STATE_DIR="${TREED_ROOT}/state"
 THEME_HASH_FILE="${STATE_DIR}/plymouth_theme.sha"
+sudo install -d -m 755 "${STATE_DIR}"
+sudo chown -R "$PI_USER":"$(id -gn "$PI_USER")" "${STATE_DIR}" || true
+
 
 # Install only missing packages. Uses --no-install-recommends for speed.
 ensure_packages() {
