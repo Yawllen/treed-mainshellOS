@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch cmdline.txt for unauthorized changes
+
+[Path]
+PathChanged=/boot/firmware/cmdline.txt
+PathChanged=/boot/cmdline.txt
+Unit=treed-cmdline-guard.service
+
+[Install]
+WantedBy=multi-user.target

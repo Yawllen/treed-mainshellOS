@@ -28,20 +28,22 @@ export CMDLINE_FILE
 trap 'log_error "Error in step: ${CURRENT_STEP:-unknown}"; exit 1' ERR
 
 STEPS=(
-  "check-env"
-  "detect-rpi"
   "packages-core"
+  "detect-rpi"
   "boot-hdmi-config"
   "plymouth-theme-install"
   "plymouth-initramfs"
   "plymouth-cmdline"
   "plymouth-systemd"
+  "cmdline-guard-install"
   "klipper-sync"
   "klipper-core"
   "klipper-profiles"
   "klipper-mainsail-theme"
   "klipperscreen-integr"
+  "verify"
 )
+
 
 log_info "TreeD loader starting"
 log_info "REPO_DIR=${REPO_DIR}, PI_USER=${PI_USER}, PI_HOME=${PI_HOME}, CMDLINE_FILE=${CMDLINE_FILE}"
