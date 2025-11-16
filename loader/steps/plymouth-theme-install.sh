@@ -1,9 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-src_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../plymouth/theme/treed" && pwd)"
-dst_dir="/usr/share/plymouth/themes/treed"
+. "${REPO_DIR}/loader/lib/common.sh"
+. "${REPO_DIR}/loader/lib/plymouth.sh"
 
-sudo rsync -a --delete "${src_dir}/" "${dst_dir}/"
-test -f "${dst_dir}/treed.plymouth"
-test -f "${dst_dir}/treed.script"
+log_info "Step plymouth-theme-install: installing TreeD plymouth theme"
+
+plymouth_install_theme_files
+plymouth_set_default_theme
+
+log_info "plymouth-theme-install: OK"

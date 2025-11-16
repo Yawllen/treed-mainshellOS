@@ -34,7 +34,6 @@ STEPS=(
   "boot-hdmi-config"
   "plymouth-theme-install"
   "plymouth-initramfs"
-  "initramfs-enable.sh"
   "plymouth-cmdline"
   "plymouth-systemd"
   "klipper-sync"

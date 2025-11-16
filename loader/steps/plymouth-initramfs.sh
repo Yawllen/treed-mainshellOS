@@ -1,18 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-theme_name="treed"
-def="/usr/share/plymouth/themes/default.plymouth"
+. "${REPO_DIR}/loader/lib/common.sh"
+. "${REPO_DIR}/loader/lib/plymouth.sh"
 
-sudo plymouth-set-default-theme "${theme_name}"
-sudo plymouth-set-default-theme --rebuild-initrd "${theme_name}"
+ensure_root
 
-kernel="$(uname -r)"
-img="/boot/initrd.img-${kernel}"
+if ! command -v plymouth-set-default-theme >/dev/null 2>&1; then
+  log_warn "plymouth-initramfs: plymouth-set-default-theme not found; skipping step"
+  exit 0
+fi
 
-sudo update-initramfs -u -k "${kernel}"
+log_info "plymouth-initramfs: applying theme '${PLYMOUTH_THEME_NAME}' and rebuilding initramfs"
 
-sudo lsinitramfs "$img" | grep -q '^usr/share/plymouth/themes/treed/treed.plymouth$'
-sudo lsinitramfs "$img" | grep -q '^usr/share/plymouth/themes/treed/treed.script$'
+plymouth_set_default_theme
+plymouth_rebuild_initramfs
 
-readlink -f "$def" | grep -q '/usr/share/plymouth/themes/treed/treed.plymouth'
+log_info "plymouth-initramfs: OK"
