@@ -2,43 +2,24 @@
 set -euo pipefail
 
 . "${REPO_DIR}/loader/lib/common.sh"
-. "${REPO_DIR}/loader/lib/rpi.sh"
+. "${REPO_DIR}/loader/lib/plymouth.sh"
 
 log_info "Step plymouth-cmdline: updating kernel cmdline for plymouth"
 
-BOOT_DIR="$(detect_boot_dir)"
-CMDLINE_FILE="$(detect_cmdline_file "${BOOT_DIR}")"
+if [ -z "${CMDLINE_FILE:-}" ]; then
+  if [ -f /boot/firmware/cmdline.txt ]; then
+    CMDLINE_FILE=/boot/firmware/cmdline.txt
+  elif [ -f /boot/cmdline.txt ]; then
+    CMDLINE_FILE=/boot/cmdline.txt
+  fi
+fi
 
-if [ ! -f "${CMDLINE_FILE}" ]; then
-  log_error "cmdline file not found: ${CMDLINE_FILE}"
-  exit 1
+if [ -z "${CMDLINE_FILE:-}" ] || [ ! -f "${CMDLINE_FILE}" ]; then
+  log_warn "plymouth-cmdline: CMDLINE_FILE not found, skipping"
+  exit 0
 fi
 
 backup_file_once "${CMDLINE_FILE}"
+normalize_cmdline "${CMDLINE_FILE}"
 
-line="$(tr -d '\n' < "${CMDLINE_FILE}" || true)"
-
-if [ -z "${line}" ]; then
-  base="$(cat /proc/cmdline || true)"
-  if [ -z "${base}" ]; then
-    log_error "both ${CMDLINE_FILE} and /proc/cmdline are empty; cannot construct cmdline"
-    exit 1
-  fi
-  line="${base}"
-  log_info "cmdline file was empty; using /proc/cmdline as base"
-fi
-
-line="$(printf '%s\n' "${line}" | sed -E 's/(^| )plymouth\.enable=0( |$)/ /g' | tr -s ' ')"
-
-for tok in quiet splash plymouth.ignore-serial-consoles logo.nologo vt.global_cursor_default=0; do
-  if ! printf '%s\n' "${line}" | grep -qE "(^| )${tok}( |$)"; then
-    line="${line} ${tok}"
-  fi
-done
-
-line="$(printf '%s\n' "${line}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' )"
-
-printf '%s\n' "${line}" > "${CMDLINE_FILE}"
-
-log_info "Updated ${CMDLINE_FILE} for plymouth"
 log_info "plymouth-cmdline: OK"
