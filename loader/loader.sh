@@ -44,31 +44,15 @@ log_info "REPO_DIR=${REPO_DIR}, PI_USER=${PI_USER}, PI_HOME=${PI_HOME}"
 for step in "${STEPS[@]}"; do
   CURRENT_STEP="$step"
   script="${REPO_DIR}/loader/steps/${step}.sh"
-
-  if [ "$step" = "detect-rpi" ]; then
-      log_info "Running step: ${step}"
-      "$script"
-      export BOOT_DIR CMDLINE_FILE CONFIG_FILE
-      continue
-  fi
-
   if [ -x "$script" ]; then
     log_info "Running step: ${step}"
-    env -i \
-      REPO_DIR="$REPO_DIR" \
-      PI_USER="$PI_USER" \
-      PI_HOME="$PI_HOME" \
-      BOOT_DIR="${BOOT_DIR:-}" \
-      CMDLINE_FILE="${CMDLINE_FILE:-}" \
-      CONFIG_FILE="${CONFIG_FILE:-}" \
-      bash "$script"
+    "$script"
   elif [ -f "$script" ]; then
     log_info "Running step: ${step}"
-    env -i \
-      REPO_DIR="$REPO_DIR" \
-      PI_USER="$PI_USER" \
-      PI_HOME="$PI_HOME" \
-      BOOT_DIR="${BOOT_DIR:-}" \
-      CMDLINE_FILE="${CMDLINE_FILE:-}" \
-      CONFIG_FILE="${CONFIG_FILE:-}" \
-      bash "$script"
+    bash "$script"
+  else
+    log_warn "Step script not found: ${script} (skipping)"
+  fi
+done
+
+log_info "TreeD loader finished successfully"

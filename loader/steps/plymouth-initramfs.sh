@@ -7,6 +7,17 @@ set -euo pipefail
 
 log_info "Step plymouth-initramfs: ensuring initramfs and auto_initramfs"
 
+if [ -z "${CONFIG_FILE:-}" ]; then
+  if [ -f /boot/firmware/config.txt ]; then
+    CONFIG_FILE=/boot/firmware/config.txt
+  elif [ -f /boot/config.txt ]; then
+    CONFIG_FILE=/boot/config.txt
+  else
+    log_error "CONFIG_FILE is not set and no config.txt found in /boot or /boot/firmware"
+    exit 1
+  fi
+fi
+
 backup_file_once "${CONFIG_FILE}"
 
 if grep -q '^auto_initramfs=' "${CONFIG_FILE}" 2>/dev/null; then
