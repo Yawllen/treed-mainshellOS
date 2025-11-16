@@ -10,9 +10,15 @@ if [ -z "${PI_HOME}" ] || [ ! -d "${PI_HOME}" ]; then
   exit 1
 fi
 
+CMDLINE_FILE="/boot/firmware/cmdline.txt"
+if [ ! -f "$CMDLINE_FILE" ]; then
+  CMDLINE_FILE="/boot/cmdline.txt"
+fi
+
 export REPO_DIR
 export PI_USER
 export PI_HOME
+export CMDLINE_FILE
 
 . "${REPO_DIR}/loader/lib/common.sh"
 . "${REPO_DIR}/loader/lib/rpi.sh"
@@ -38,7 +44,7 @@ STEPS=(
 )
 
 log_info "TreeD loader starting"
-log_info "REPO_DIR=${REPO_DIR}, PI_USER=${PI_USER}, PI_HOME=${PI_HOME}"
+log_info "REPO_DIR=${REPO_DIR}, PI_USER=${PI_USER}, PI_HOME=${PI_HOME}, CMDLINE_FILE=${CMDLINE_FILE}"
 
 for step in "${STEPS[@]}"; do
   CURRENT_STEP="$step"

@@ -37,3 +37,32 @@ plymouth_rebuild_initramfs() {
     log_warn "update-initramfs not found; skipping initramfs rebuild"
   fi
 }
+
+normalize_cmdline() {
+  local file
+  file="${1:-${CMDLINE_FILE:-}}"
+
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    log_warn "normalize_cmdline: cmdline file not found: ${file}"
+    return 0
+  fi
+
+  local line
+  line="$(tr -d '\n' < "$file")"
+  line=" $line "
+
+  line="$(printf '%s' "$line" | sed -E 's/(^| )nosplash( |$)/ /g')"
+  line="$(printf '%s' "$line" | sed -E 's/(^| )plymouth\.enable=0( |$)/ /g')"
+
+  for opt in quiet splash plymouth.ignore-serial-consoles logo.nologo vt.global_cursor_default=0; do
+    case " $line " in
+      *" $opt "*) ;;
+      *) line="$line $opt" ;;
+    esac
+  done
+
+  line="$(printf '%s\n' "$line" | tr -s ' ' | sed 's/^ //; s/ $//')"
+  printf '%s\n' "$line" > "$file"
+
+  log_info "normalize_cmdline: updated ${file}"
+}
