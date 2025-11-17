@@ -5,7 +5,7 @@ Window.SetBackgroundBottomColor(0.0, 0.0, 0.0);
 screen_w = Window.GetWidth();
 screen_h = Window.GetHeight();
 
-# Логотип по центру
+# ЛОГО — по центру
 logo_image  = Image("watermark.png");
 logo_sprite = Sprite(logo_image);
 
@@ -18,17 +18,15 @@ logo_y = Window.GetY() + (screen_h - logo_h) / 2;
 logo_sprite.SetPosition(logo_x, logo_y, 10);
 logo_sprite.SetOpacity(1.0);
 
-# Прогресс-бар снизу (20px)
-progress   = 0.0;
+# ПРОГРЕСС-БАР — по низу, 20px
+progress = 0.0;
 bar_height = 20;
 bar_width  = screen_w;
 bar_x      = Window.GetX();
 bar_y      = Window.GetY() + screen_h - bar_height;
 
-bar_texture = Image("prog.png");
-bar_texture = bar_texture.Scale(bar_width, bar_height);
-
-bar_sprite = Sprite();
+bar_texture = Image("prog.png").Scale(bar_width, bar_height);
+bar_sprite  = Sprite();
 bar_sprite.SetPosition(bar_x, bar_y, 20);
 bar_sprite.SetOpacity(1.0);
 
@@ -47,18 +45,57 @@ fun update_bar ()
     last_width = w;
 }
 
-# Колбэк прогресса: универсально (time, progress)
-fun boot_progress(time, new_progress)
+# МЯГКИЙ АВТОПРОГРЕСС до 0.92, если нет событий
+last_event_time = 0.0;
+
+fun tick ()
+{
+    # постепенно тянем к 0.92, но не переписываем реальный прогресс
+    if (progress < 0.92) {
+        soft = progress + 0.003; # ~0.3% / тик
+        if (soft > 0.92) soft = 0.92;
+        progress = soft;
+        update_bar();
+    }
+    Plymouth.SetTimer(tick, 0.05); # 20 FPS
+}
+tick();
+
+# Callbacks прогресса
+fun boot_progress_callback (time, new_progress)
 {
     if (new_progress < 0.0) new_progress = 0.0;
     if (new_progress > 1.0) new_progress = 1.0;
-
-    progress = new_progress;
-    update_bar();
+    if (new_progress > progress) {
+        progress = new_progress;
+        update_bar();
+    }
 }
 
-# Регистрируем ТОЛЬКО двухаргументный вариант
-Plymouth.SetBootProgressFunction(boot_progress);
+fun boot_progress_callback_simple (new_progress)
+{
+    boot_progress_callback(0.0, new_progress);
+}
 
-# Инициализация первичного состояния бара (>=1px)
-update_bar();
+Plymouth.SetBootProgressFunction(boot_progress_callback);
+Plymouth.SetBootProgressFunction(boot_progress_callback_simple);
+
+# Аккуратное завершение: дорисовать до 100% и затухание
+fun fade_out_step ()
+{
+    op = logo_sprite.GetOpacity();
+    op = op - 0.12;
+    if (op < 0.0) op = 0.0;
+    logo_sprite.SetOpacity(op);
+    bar_sprite.SetOpacity(op);
+    if (op > 0.0) Plymouth.SetTimer(fade_out_step, 0.05);
+}
+
+fun quit_callback ()
+{
+    progress = 1.0;
+    update_bar();
+    Plymouth.SetTimer(fade_out_step, 0.05);
+}
+
+Plymouth.SetQuitFunction(quit_callback);
