@@ -43,7 +43,7 @@ fi
 
 # Проверка строки initramfs в config.txt
 if [ -f "${CONFIG_FILE}" ]; then
-  if grep -qE "^initramfs[[:space:]]+initrd\.img-${KVER}" "${CONFIG_FILE}"; then
+  if grep -Fq "initramfs initrd.img-${KVER}" "${CONFIG_FILE}"; then
     pass "config.txt initramfs initrd.img-${KVER}"
   else
     failf "config.txt initramfs initrd.img-${KVER}"
@@ -51,6 +51,7 @@ if [ -f "${CONFIG_FILE}" ]; then
 else
   failf "config.txt (${CONFIG_FILE} missing)"
 fi
+
 
 CMDLINE_CONTENT="$(tr -d '\n' < "${CMDLINE_FILE}" 2>/dev/null || true)"
 
