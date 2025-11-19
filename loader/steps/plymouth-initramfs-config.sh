@@ -26,6 +26,6 @@ fi
 sed -i '/^initramfs[[:space:]]\+/d' "${CONFIG_FILE}"
 
 printf 'initramfs %s followkernel\n' "${initrd_name}" >> "${CONFIG_FILE}"
-log_info "plymouth-initramfs-config: set initramfs line in ${CONFIG_FILE} to '\''initramfs ${initrd_name} followkernel'\'''
+log_info "plymouth-initramfs-config: set initramfs line in ${CONFIG_FILE} to initramfs ${initrd_name} followkernel"
 
 log_info "plymouth-initramfs-config: OK"
