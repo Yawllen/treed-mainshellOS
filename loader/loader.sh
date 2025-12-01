@@ -40,6 +40,7 @@ STEPS=(
   "klipper-sync"
   "klipper-core"
   "klipper-profiles"
+  "klipper-sync-to-config"
   "klipper-anti-shutdown"
   "moonraker-config"
   "klipper-mainsail-theme"
