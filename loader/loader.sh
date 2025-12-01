@@ -37,6 +37,7 @@ STEPS=(
   "plymouth-initramfs-config"
   "plymouth-cmdline"
   "plymouth-systemd"
+  "plymouth-verify"
   "klipper-sync"        # репо -> ~/treed/klipper
   "klipper-profiles"    # правим serial, current в staging
   "klipper-core"        # теперь КЛАДЁМ ВЕСЬ klipper/ в /config
