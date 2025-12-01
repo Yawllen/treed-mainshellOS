@@ -37,10 +37,9 @@ STEPS=(
   "plymouth-initramfs-config"
   "plymouth-cmdline"
   "plymouth-systemd"
-  "klipper-sync"
-  "klipper-core"
-  "klipper-profiles"
-  "klipper-sync-to-config"
+  "klipper-sync"        # репо -> ~/treed/klipper
+  "klipper-profiles"    # правим serial, current в staging
+  "klipper-core"        # теперь КЛАДЁМ ВЕСЬ klipper/ в /config
   "klipper-anti-shutdown"
   "moonraker-config"
   "klipper-mainsail-theme"
@@ -48,6 +47,7 @@ STEPS=(
   "klipperscreen-integr"
   "verify"
 )
+
 
 
 
