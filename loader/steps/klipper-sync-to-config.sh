@@ -3,28 +3,26 @@ set -euo pipefail
 
 . "${REPO_DIR}/loader/lib/common.sh"
 
+log_info "Step klipper-sync-to-config: mirror profiles into Klipper config dir"
+
 KLIPPER_STAGE_DIR="${PI_HOME}/treed/klipper"
 CONFIG_ROOT="${PI_HOME}/printer_data/config"
-TARGET_DIR="${CONFIG_ROOT}/treed"
 
-log_info "Step klipper-sync-to-config: syncing ${KLIPPER_STAGE_DIR} -> ${TARGET_DIR}"
+PROFILES_SRC="${KLIPPER_STAGE_DIR}/profiles"
+PROFILES_DST="${CONFIG_ROOT}/profiles"
 
-if [ ! -d "${KLIPPER_STAGE_DIR}" ]; then
-  log_warn "klipper-sync-to-config: source dir ${KLIPPER_STAGE_DIR} not found, skipping"
+if [ ! -d "${PROFILES_SRC}" ]; then
+  log_warn "klipper-sync-to-config: source profiles dir not found: ${PROFILES_SRC} (skipping)"
   exit 0
 fi
 
-ensure_dir "${CONFIG_ROOT}"
+if [ -d "${PROFILES_DST}" ]; then
+  rm -rf "${PROFILES_DST}"
+fi
 
-rm -rf "${TARGET_DIR}"
-mkdir -p "${TARGET_DIR}"
+mkdir -p "${PROFILES_DST}"
+cp -a "${PROFILES_SRC}/." "${PROFILES_DST}/"
 
-cp -a "${KLIPPER_STAGE_DIR}/." "${TARGET_DIR}/"
+chown -R "${PI_USER}:${PI_USER}" "${PROFILES_DST}"
 
-# В runtime нам не нужен второй printer.cfg внутри treed,
-# чтобы не путать с корневым /config/printer.cfg
-rm -f "${TARGET_DIR}/printer.cfg"
-
-chown -R "${PI_USER}:${PI_USER}" "${TARGET_DIR}"
-
-log_info "klipper-sync-to-config: OK"
+log_info "klipper-sync-to-config: profiles synced to ${PROFILES_DST}"
